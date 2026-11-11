@@ -1,0 +1,26 @@
+# Redis + Postgres with PASSWORDS, reachable only from this machine (127.0.0.1).
+# Start with:  docker compose up -d      (reads passwords from .env)
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: collab-redis
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: collab-db
+    environment:
+      POSTGRES_USER: collab
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: collab_editor
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  pgdata:

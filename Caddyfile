@@ -1,0 +1,8 @@
+# Public HTTPS (automatic certificates) in front of the app. WebSockets work automatically.
+# Usage:  DOMAIN=editor.example.com caddy run --config Caddyfile
+# Then run the app with NODE_ENV=production TRUST_PROXY=1 ALLOWED_ORIGINS=https://editor.example.com
+# and open ONLY ports 80/443 on the firewall (never 8080, 5432 or 6379).
+{$DOMAIN:localhost} {
+	encode gzip
+	reverse_proxy 127.0.0.1:8080
+}

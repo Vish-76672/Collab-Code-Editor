@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>collab editor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0f1115; --panel:#14171d; --border:#262b34; --text:#e6e8eb; --muted:#6b7280;
+          --accent:#f2c14e; --accent-dim:#f2c14e33; --ok:#5eead4; --err:#f87171; }
+  * { box-sizing: border-box; }
+  html, body { height:100%; margin:0; background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; }
+  button { font-family:inherit; }
+
+  /* ---------- centered card screens (auth, lobby) ---------- */
+  .screen { display:none; min-height:100%; flex-direction:column; }
+  .center { align-items:center; justify-content:center; padding:24px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:28px; width:100%; max-width:380px; display:flex; flex-direction:column; gap:14px; }
+  .card h1 { font-size:18px; margin:0; }
+  .card p.sub { font-size:13px; color:var(--muted); margin:0; line-height:1.5; }
+  .tabs { display:flex; gap:6px; }
+  .tab { flex:1; background:var(--bg); color:var(--muted); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:13px; cursor:pointer; }
+  .tab.active { color:var(--text); border-color:var(--accent-dim); background:#1b1f27; }
+  .field { display:flex; flex-direction:column; gap:6px; }
+  .field label { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  .field input { background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:9px 10px; font-family:'JetBrains Mono',monospace; font-size:13px; }
+  .field input:focus { outline:none; border-color:var(--accent-dim); box-shadow:0 0 0 3px var(--accent-dim); }
+  .primary { background:var(--accent); color:#14171d; border:none; border-radius:6px; padding:10px; font-weight:700; font-size:13px; cursor:pointer; }
+  .primary:disabled { opacity:.5; cursor:not-allowed; }
+  .secondary { background:none; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 12px; font-size:12.5px; cursor:pointer; }
+  .secondary:hover { border-color:var(--accent-dim); }
+  .error { color:var(--err); font-size:12.5px; min-height:16px; }
+  .hint { color:var(--muted); font-size:12px; min-height:14px; }
+  .link-button { background:none; color:var(--accent); border:0; padding:2px; cursor:pointer; font:inherit; font-size:12px; text-align:left; }
+  .security-box { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:10px; }
+  .security-box summary { cursor:pointer; font-size:13px; font-weight:600; }
+  .security-box .field input { width:100%; }
+  .security-row { display:flex; gap:8px; flex-wrap:wrap; }
+  #mfa-secret, #mfa-recovery-codes { display:block; overflow-wrap:anywhere; background:var(--bg); padding:10px; border-radius:6px; font-family:'JetBrains Mono',monospace; }
+
+  /* ---------- lobby ---------- */
+  #lobby-screen { padding:0; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 24px; border-bottom:1px solid var(--border); background:var(--panel); }
+  .topbar .who { font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--muted); display:flex; gap:12px; align-items:center; }
+  .lobby-body { max-width:560px; width:100%; margin:32px auto; padding:0 20px; display:flex; flex-direction:column; gap:18px; }
+  .lobby-body h2 { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:8px 0 0; }
+  #join-form { display:flex; gap:8px; }
+  #join-input { flex:1; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:9px 10px; font-family:'JetBrains Mono',monospace; font-size:12.5px; }
+  #room-list { display:flex; flex-direction:column; gap:8px; font-size:13px; color:var(--muted); }
+  .room-row { display:flex; justify-content:space-between; align-items:center; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:11px 14px; color:var(--text); cursor:pointer; text-align:left; }
+  .room-row:hover { border-color:var(--accent-dim); }
+  .room-row-id { font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--accent); }
+  .room-row-role { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+
+  /* ---------- room ---------- */
+  #room-screen { height:100%; }
+  header { display:flex; align-items:center; justify-content:space-between; padding:10px 20px; border-bottom:1px solid var(--border); background:var(--panel); gap:12px; flex-wrap:wrap; }
+  .room { display:flex; align-items:center; gap:10px; }
+  .room-label { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  .room-id { font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:700; color:var(--accent); }
+  #invite-wrap { display:none; gap:6px; }
+  .lang-select-wrap { display:flex; align-items:center; gap:8px; }
+  .lang-select-wrap label { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  #lang-select { background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:5px 10px; font-family:'JetBrains Mono',monospace; font-size:12.5px; }
+  #run-btn { background:var(--ok); color:#0b1f1c; border:none; border-radius:6px; padding:7px 16px; font-weight:700; font-size:12.5px; cursor:pointer; font-family:'JetBrains Mono',monospace; }
+  #run-btn:disabled { opacity:.45; cursor:not-allowed; }
+  #run-btn.unsupported { background:var(--border); color:var(--muted); }
+  #presence-list { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .presence-chip { display:flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border); border-radius:100px; padding:4px 10px 4px 6px; font-size:11.5px; font-family:'JetBrains Mono',monospace; }
+  .presence-chip.stale { opacity:.45; }
+  .presence-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .status { display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--muted); }
+  .status-dot { width:8px; height:8px; border-radius:50%; background:var(--muted); transition:background .3s, box-shadow .3s; }
+  .status-dot.live { background:var(--ok); box-shadow:0 0 10px 1px var(--ok); }
+
+  main { flex:1; padding:16px 20px; display:flex; flex-direction:row; gap:14px; overflow:hidden; min-height:0; }
+  #work { flex:1; min-width:0; display:flex; flex-direction:column; gap:12px; }
+  #editor-container { flex:1; min-height:0; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .cm-editor { height:100%; font-family:'JetBrains Mono',monospace; font-size:14px; }
+  .cm-editor .remote-selection { background:color-mix(in srgb, var(--remote-cursor-color) 24%, transparent); }
+  .cm-editor .remote-cursor-label { position:relative; display:inline-block; width:0; height:1.25em; border-left:2px solid var(--remote-cursor-color, #4fc3a1); vertical-align:text-bottom; pointer-events:none; z-index:5; }
+  .cm-editor .remote-cursor-label::before { content:attr(data-name); position:absolute; left:-2px; top:-1.55em; padding:2px 5px; border-radius:4px 4px 4px 0; color:#fff; background:var(--remote-cursor-color, #4fc3a1); font:10px/1.3 system-ui,sans-serif; white-space:nowrap; }
+  .cm-scroller { line-height:1.6; }
+
+  #output { height:200px; flex-shrink:0; border:1px solid var(--border); border-radius:8px; background:var(--panel); display:flex; flex-direction:column; overflow:hidden; }
+  #output-head { display:flex; justify-content:space-between; align-items:center; padding:7px 14px; border-bottom:1px solid var(--border); font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); }
+  #output-head .title { letter-spacing:.08em; text-transform:uppercase; }
+  #output-clear { background:none; border:1px solid var(--border); color:var(--muted); border-radius:5px; font-size:10.5px; padding:2px 8px; cursor:pointer; font-family:inherit; }
+  #output-actions { display:flex; align-items:center; gap:7px; min-width:0; }
+  #output-toggle { width:25px; height:23px; border:1px solid var(--border); border-radius:5px; background:transparent; color:var(--muted); cursor:pointer; }
+  #output.output-collapsed { height:38px !important; flex-basis:38px; }
+  #output.output-collapsed #output-body,#output.output-collapsed #output-meta { display:none; }
+  #output-body { flex:1; margin:0; padding:10px 14px; overflow:auto; font-family:'JetBrains Mono',monospace; font-size:12.5px; line-height:1.55; white-space:pre-wrap; word-break:break-word; }
+  .out-ok { color:var(--text); } .out-err { color:var(--err); } .out-note { color:var(--accent); }
+
+  #chat { width:300px; flex-shrink:0; border:1px solid var(--border); border-radius:8px; background:var(--panel); display:flex; flex-direction:column; overflow:hidden; }
+  #chat-head { padding:10px 14px; border-bottom:1px solid var(--border); font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  #chat-list { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
+  .chat-msg { max-width:92%; align-self:flex-start; }
+  .chat-msg.me { align-self:flex-end; }
+  .chat-head { display:flex; gap:8px; align-items:baseline; font-size:11px; margin-bottom:2px; }
+  .chat-msg.me .chat-head { justify-content:flex-end; }
+  .chat-name { font-weight:600; font-family:'JetBrains Mono',monospace; }
+  .chat-time { color:var(--muted); font-size:10px; }
+  .chat-text { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:7px 11px; font-size:13px; line-height:1.45; white-space:pre-wrap; word-break:break-word; }
+  .chat-msg.me .chat-text { background:#1b2a28; border-color:#24443f; }
+  #chat-note { min-height:16px; padding:0 12px; font-size:11px; color:var(--err); font-family:'JetBrains Mono',monospace; }
+  #chat-form { display:flex; gap:8px; padding:10px; border-top:1px solid var(--border); }
+  #chat-input { flex:1; resize:none; height:38px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-family:'Inter',sans-serif; font-size:13px; }
+  #chat-input:focus { outline:none; border-color:var(--accent-dim); }
+  #chat-send { background:var(--accent); color:#14171d; border:none; border-radius:8px; padding:0 14px; font-weight:700; cursor:pointer; }
+  @media (max-width: 800px) { main { flex-direction:column; } #chat { width:auto; height:240px; } }
+
+  footer { padding:8px 20px; border-top:1px solid var(--border); background:var(--panel); font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); }
+
+  /* Reference-inspired collaborative IDE shell */
+  :root { --bg:#111419; --panel:#1a1e24; --border:#303741; --text:#e9edf3; --muted:#9ca6b4; --accent:#68c1ad; --accent-dim:#68c1ad44; --ok:#63d4b0; --err:#ff777f; --surface-2:#22272f; --surface-3:#292f38; }
+  body { background:#111419; }
+  #room-screen { height:100vh; min-height:0; overflow:hidden; background:#14181d; }
+  .editor-topbar { min-height:58px; padding:8px 16px; background:linear-gradient(100deg,#20252c,#2b3139 58%,#20252c); border-bottom:1px solid #39414b; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:nowrap; }
+  .brand-cluster,.toolbar-actions,.room-tools,.collaborator-bar { display:flex; align-items:center; gap:10px; min-width:0; }
+  .brand-mark { color:#dfe5ed; font-size:24px; line-height:1; padding:2px 5px; background:transparent; border:0; cursor:pointer; }
+  .brand-symbol { width:30px; height:30px; display:block; }
+  .brand-name { font-size:13px; font-weight:700; white-space:nowrap; }
+  .room-chip { background:#ffffff0b; border:1px solid #ffffff1b; border-radius:8px; color:#dfe5ed; font:11px 'JetBrains Mono',monospace; padding:8px 10px; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .command-search { flex:1; max-width:450px; min-width:140px; height:36px; border-radius:10px; display:flex; align-items:center; gap:8px; padding:0 12px; color:#aeb8c5; background:#ffffff0b; border:1px solid #ffffff1b; }
+  .command-search span { font-size:20px; }
+  .command-search input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:#fff; font:12px 'Inter',sans-serif; }
+  .command-search input::placeholder { color:#aeb8c5; }
+  .theme-toggle { flex:0 0 auto; background:#ffffff0b; color:#dfe5ed; border:1px solid #ffffff22; border-radius:8px; padding:8px 10px; font-size:11px; cursor:pointer; }
+  .theme-toggle:hover { border-color:var(--accent); }
+  .toolbar-actions { justify-content:flex-end; }
+  .collaborator-bar { padding:4px 9px; border:1px solid #ffffff2c; background:#ffffff12; border-radius:18px; }
+  .collaborator-label { color:#ece8ff; font-size:11px; white-space:nowrap; }
+  #presence-list { display:flex; gap:4px; align-items:center; }
+  #presence-list .presence-chip { border:0; background:transparent; padding:0; font-size:10px; }
+  #presence-list .presence-chip { max-width:112px; min-width:0; }
+  #presence-list .presence-chip span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #presence-list .presence-more { flex:0 0 auto; color:#fff; font-weight:700; }
+  #invite-wrap { display:none; align-items:center; gap:5px; }
+  #invite-wrap .secondary { border-color:#ffffff38; background:#ffffff12; color:#fff; padding:7px 9px; }
+  .room-tools { gap:7px; }
+  .lang-select-wrap { padding:4px 8px; border:1px solid #ffffff27; border-radius:7px; }
+  .lang-select-wrap label { display:none; }
+  #lang-select { background:transparent; color:#eeeaff; border:0; padding:3px; }
+  #lang-select option { color:#19172f; }
+  #run-btn { background:linear-gradient(120deg,#b085ff,#8c69ef); color:white; border-radius:7px; padding:8px 13px; }
+  .status { font-size:10px; white-space:nowrap; }
+  .workspace-body { display:flex; flex:1; min-height:0; overflow:hidden; }
+  #explorer-panel { width:230px; flex:0 0 230px; background:#1b1f25; border-right:1px solid var(--border); display:flex; flex-direction:column; min-height:0; }
+  .explorer-tabs { height:40px; display:flex; border-bottom:1px solid var(--border); }
+  .explorer-tabs button { flex:1; color:#aaa4d1; border:0; border-bottom:2px solid transparent; background:transparent; cursor:pointer; font-size:11px; }
+  .explorer-tabs button.active { color:#fff; border-bottom-color:#ba87ff; }
+  .explorer-pane { flex:1; min-height:0; overflow-y:auto; padding:15px 12px; color:#d9d5f2; font-size:12px; }
+  .explorer-heading { display:flex; justify-content:space-between; color:#aaa5cc; font-size:10px; letter-spacing:.08em; font-weight:700; margin:0 4px 18px; }
+  .tree-root { color:#a8a3ca; padding:0 6px 8px; font-size:11px; }
+  .tree-file { display:flex; align-items:center; gap:9px; width:100%; text-align:left; background:transparent; border:0; color:#e6e2fa; cursor:pointer; padding:9px 10px; border-radius:6px; font:12px 'JetBrains Mono',monospace; }
+  .tree-file.active { background:#ffffff15; outline:1px solid #6f56a6; color:#fff; }
+  .file-dot { color:#5be0b5; font-size:13px; }
+  .explorer-note { color:#9892bd; font-size:10px; line-height:1.5; padding:14px 7px; }
+  .explorer-footer { border-top:1px solid var(--border); padding:11px 13px; font-size:9px; color:#8f8ab4; letter-spacing:.04em; }
+  .editor-main { display:flex; flex:1; min-width:0; min-height:0; flex-direction:column; }
+  .editor-tabs { height:40px; flex:0 0 40px; display:flex; align-items:stretch; background:#1a1e24; border-bottom:1px solid var(--border); }
+  .editor-tab { display:flex; align-items:center; gap:8px; padding:0 13px; color:#e9edf3; background:#252a31; border-right:1px solid var(--border); font:11px 'JetBrains Mono',monospace; }
+  .editor-tab .file-dot { color:#67d7a2; }
+  .editor-tab-meta { align-self:center; margin-left:auto; padding-right:14px; color:#817ca6; font:10px 'JetBrains Mono',monospace; white-space:nowrap; }
+  #room-screen main { display:flex; flex:1; min-height:0; padding:0; gap:0; overflow:hidden; }
+  #work { display:flex; flex:1; min-width:0; min-height:0; flex-direction:column; overflow:hidden; padding:12px; background:#15191e; }
+  #editor-container { flex:1 1 0; min-width:0; min-height:0; border:1px solid var(--border); border-radius:7px; background:#171b20; }
+  #editor-container .cm-editor { height:100%; min-height:0; }
+  #editor-container .cm-scroller { overflow:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+  #output { border-color:var(--border); background:#1a1e24; }
+  #chat { width:285px; flex:0 0 285px; border:0; border-left:1px solid var(--border); border-radius:0; background:#1b1f25; }
+  .assistant-tabs { display:flex; gap:5px; padding:10px 12px; border-bottom:1px solid var(--border); }
+  .assistant-tabs button { flex:1; background:transparent; color:#aaa4d1; border:1px solid transparent; border-radius:7px; padding:7px; cursor:pointer; font-size:11px; }
+  .assistant-tabs button.active { background:#ffffff14; border-color:#ffffff20; color:#fff; }
+  .chat-pane { display:flex; flex:1; min-height:0; flex-direction:column; }
+  #chat-head { padding:12px 14px; font-family:'Inter',sans-serif; font-size:11px; letter-spacing:.04em; text-transform:none; color:#b9b3dc; }
+  #chat-list { gap:12px; }
+  .chat-text { background:#22272e; border-color:#343b45; border-radius:11px; }
+  .chat-msg.me .chat-text { background:#243b38; border-color:#355c54; }
+  #chat-form { border-top:1px solid var(--border); }
+  #chat-input { background:#14181d; border-color:#39414b; color:var(--text); }
+  #chat-send { background:#3c8f7c; color:#fff; }
+  .ai-placeholder { margin:14px; padding:14px; border:1px solid var(--border); border-radius:10px; background:#ffffff08; color:var(--muted); font-size:12px; line-height:1.6; }
+  .ai-placeholder strong { color:#fff; display:block; margin-bottom:6px; }
+  .mfa-qr-wrap { width:236px; min-height:236px; display:flex; align-items:center; justify-content:center; padding:8px; border-radius:10px; background:white; }
+  #mfa-qr { max-width:220px; height:auto; }
+  .explorer-heading button { width:23px; height:23px; padding:0; border:0; border-radius:5px; background:transparent; color:var(--muted); font-size:18px; cursor:pointer; }
+  .explorer-heading button:hover { background:var(--surface-3); color:var(--text); }
+  .tree-file-row { display:flex; align-items:center; gap:3px; margin:2px 0; }
+  .tree-folder { width:100%; padding:7px 5px; border:0; background:transparent; color:var(--muted); text-align:left; cursor:pointer; font:11px 'JetBrains Mono',monospace; }
+  .tree-folder:hover { background:var(--surface-3); color:var(--text); }
+  .tree-file { flex:1; min-width:0; display:flex; align-items:center; gap:9px; text-align:left; background:transparent; border:0; color:#e6e2fa; cursor:pointer; padding:9px 10px; border-radius:6px; font:12px 'JetBrains Mono',monospace; }
+  .tree-file.active { background:#ffffff12; outline:1px solid #59626f; color:#fff; }
+  .tree-file-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .file-delete { width:24px; height:26px; border:0; border-radius:5px; background:transparent; color:var(--muted); opacity:.45; cursor:pointer; }
+  .file-rename { width:24px; height:26px; display:grid; place-items:center; border:0; border-radius:5px; background:transparent; color:var(--muted); opacity:.45; cursor:pointer; }
+  .file-rename svg { width:15px; height:15px; }
+  .tree-file-row:hover .file-delete,.tree-file-row:hover .file-rename,.file-delete:focus-visible,.file-rename:focus-visible { opacity:1; }
+  .file-rename:hover,.file-delete:hover { background:var(--surface-3); color:var(--text); }
+  .file-rename[hidden] { display:none; }
+  .file-history { width:25px; height:25px; flex:0 0 25px; display:grid; place-items:center; padding:0; border:0; border-radius:5px; color:var(--muted); background:transparent; cursor:pointer; }
+  .file-history:hover { color:var(--accent); background:var(--surface-2); }
+  .file-history svg { width:15px; height:15px; }
+  .workspace-create-form { display:flex; align-items:center; gap:7px; margin:3px 0 8px; padding:4px 6px; border:1px solid var(--accent); border-radius:5px; background:var(--panel); }
+  .workspace-create-form[hidden] { display:none; }
+  .workspace-create-form .file-dot { flex:0 0 auto; }
+  .workspace-create-form input { width:100%; min-width:0; border:0; outline:0; color:var(--text); background:transparent; font:12px 'JetBrains Mono',monospace; }
+  .workspace-create-form input::placeholder { color:var(--muted); }
+  .editor-tabs { overflow-x:auto; scrollbar-width:thin; }
+  .editor-tab-list { display:flex; align-items:stretch; min-width:0; }
+  .editor-tab { flex:0 0 auto; cursor:pointer; user-select:none; }
+  .editor-tab.active { border-top:2px solid var(--accent); background:#171b20; }
+  .editor-tab-close { width:20px; height:20px; margin-left:5px; border:0; border-radius:4px; color:var(--muted); background:transparent; cursor:pointer; font-size:15px; line-height:1; }
+  .editor-tab-close:hover { color:var(--text); background:var(--surface-3); }
+  #app-dialog { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:20px; background:#0009; }
+  #app-dialog[hidden] { display:none; }
+  .app-dialog-card { width:min(420px,100%); padding:22px; border:1px solid var(--border); border-radius:12px; background:var(--panel); box-shadow:0 20px 70px #0008; }
+  .app-dialog-card h2 { margin:0 0 9px; color:var(--text); font-size:17px; }
+  .app-dialog-card p { margin:0; color:var(--muted); font-size:13px; line-height:1.55; }
+  .app-dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+  .app-dialog-actions button { min-width:78px; }
+  #history-dialog { position:fixed; inset:0; z-index:950; display:grid; place-items:center; padding:18px; background:#0009; }
+  #history-dialog[hidden] { display:none; }
+  .history-card { width:min(900px,100%); height:min(680px,90vh); display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--border); border-radius:12px; background:var(--panel); box-shadow:0 20px 70px #0008; }
+  .history-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:15px 18px; border-bottom:1px solid var(--border); }
+  .history-head h2 { margin:0; font-size:16px; }
+  .history-head button { border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:23px; }
+  .history-actions { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border); }
+  .history-actions span { flex:1; color:var(--muted); font-size:12px; }
+  .history-body { display:grid; grid-template-columns:minmax(220px, 34%) 1fr; min-height:0; flex:1; }
+  #history-version-list { overflow:auto; padding:8px; border-right:1px solid var(--border); }
+  .history-version { display:flex; width:100%; flex-direction:column; gap:4px; margin-bottom:5px; padding:10px; border:1px solid transparent; border-radius:7px; color:var(--text); background:transparent; text-align:left; cursor:pointer; }
+  .history-version:hover,.history-version.active { border-color:var(--accent); background:var(--surface-2); }
+  .history-version strong { font-size:12px; font-weight:600; }
+  .history-version small { color:var(--muted); font-size:10px; }
+  #history-preview { overflow:auto; min-width:0; margin:0; padding:14px; color:var(--text); font:12px/1.6 'JetBrains Mono',monospace; white-space:pre; tab-size:2; }
+  #history-note { min-height:20px; padding:0 14px 8px; color:var(--muted); font-size:12px; }
+  #history-note.error { color:#ff777f; }
+  @media (max-width:600px) { #history-dialog { padding:8px; } .history-card { height:92vh; } .history-body { grid-template-columns:1fr; grid-template-rows:minmax(120px, 35%) 1fr; } #history-version-list { border-right:0; border-bottom:1px solid var(--border); } }
+  .chat-msg { position:relative; }
+  .chat-delete { position:absolute; right:-4px; bottom:3px; padding:3px 6px; border:1px solid var(--border); border-radius:5px; color:var(--muted); background:var(--panel); opacity:0; cursor:pointer; font-size:10px; transition:opacity .12s; }
+  .chat-msg:hover .chat-delete,.chat-delete:focus-visible { opacity:1; }
+  @media (hover:none) { .chat-delete { opacity:.75; } }
+  .chat-delete { width:28px; height:26px; display:grid; place-items:center; padding:0; }
+  .chat-delete svg { width:14px; height:14px; }
+  .chat-delete:hover { color:#ff777f; border-color:#ff777f88; }
+  .workspace-search-box { margin:0 4px 12px; }
+  .workspace-search-box input { width:100%; padding:8px 9px; border:1px solid var(--border); border-radius:5px; background:var(--bg); color:var(--text); font:11px 'Inter',sans-serif; }
+  .workspace-search-box input:focus { outline:1px solid var(--accent); }
+  #workspace-search-results { display:flex; flex-direction:column; gap:3px; }
+  .git-connect-form { display:flex; flex-direction:column; gap:9px; margin:0 4px 14px; }
+  .git-connect-form p,.git-status-note { margin:0; color:var(--muted); font-size:11px; line-height:1.5; }
+  .git-connect-form input { width:100%; min-width:0; padding:8px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font:11px 'Inter',sans-serif; }
+  .git-connect-form button,.git-disconnect,.git-refresh { min-height:34px; padding:6px 9px; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text); cursor:pointer; font-size:11px; }
+  .git-connect-form button { background:var(--accent); color:#14201e; font-weight:700; }
+  .git-status-card { display:flex; flex-direction:column; gap:8px; margin:0 4px 14px; padding:10px; border:1px solid var(--border); border-radius:7px; background:var(--panel); }
+  .git-repo-link { overflow-wrap:anywhere; color:var(--text); font:12px 'JetBrains Mono',monospace; text-decoration:none; }
+  .git-repo-link:hover,.git-commit-link:hover { text-decoration:underline; }
+  .git-branch { color:var(--muted); font-size:11px; }
+  .git-commit-link { color:var(--text); font-size:11px; font-weight:600; text-decoration:none; }
+  .git-commit-meta { color:var(--muted); font-size:10px; line-height:1.45; }
+  .git-file-heading { margin:14px 4px 7px; color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+  #git-commit-files { display:flex; flex-direction:column; gap:5px; }
+  .git-commit-file { display:flex; align-items:flex-start; gap:6px; padding:6px 7px; border:1px solid var(--border); border-radius:5px; background:var(--panel); font-size:10px; }
+  .git-file-state { flex:0 0 auto; color:var(--accent); font:9px 'JetBrains Mono',monospace; text-transform:uppercase; }
+  .git-file-path { min-width:0; overflow-wrap:anywhere; color:var(--text); font:10px 'JetBrains Mono',monospace; }
+  .git-disconnect { margin:12px 4px 0; color:var(--muted); background:transparent; }
+  .git-panel-note { margin:7px 4px; color:var(--muted); font-size:10px; line-height:1.5; }
+  .git-panel-note.error { color:var(--err); }
+  .git-import-actions { display:flex; gap:7px; margin:0 4px 12px; }
+  .git-import-actions button { min-height:34px; padding:6px 9px; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text); cursor:pointer; font-size:11px; }
+  .git-import-actions .primary { background:var(--accent); color:#14201e; font-weight:700; }
+  #git-import-preview[hidden],#git-import-actions[hidden] { display:none !important; }
+  #git-import-files { max-height:220px; overflow:auto; padding:0 4px; }
+  .git-import-file { padding:4px 0; color:var(--muted); font:10px 'JetBrains Mono',monospace; overflow-wrap:anywhere; }
+  .git-branch-picker { display:flex; flex-direction:column; gap:5px; margin:0 4px 10px; color:var(--muted); font-size:10px; }
+  .git-branch-picker select { min-width:0; padding:7px; border:1px solid var(--border); border-radius:5px; background:var(--bg); color:var(--text); font:11px 'JetBrains Mono',monospace; }
+  .git-import-file label { display:flex; align-items:flex-start; gap:7px; cursor:pointer; }
+  .git-import-file input { margin-top:1px; accent-color:var(--accent); }
+  .git-compare-panel { margin:10px 4px 14px; }
+  .git-compare-panel > button { min-height:34px; padding:6px 9px; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text); cursor:pointer; font-size:11px; }
+  #git-compare-files { display:flex; flex-direction:column; gap:4px; max-height:240px; overflow:auto; margin-top:8px; }
+  .git-compare-file { display:flex; align-items:center; gap:7px; width:100%; padding:7px; border:1px solid var(--border); border-radius:5px; background:var(--panel); color:var(--text); text-align:left; cursor:pointer; }
+  .git-compare-file span:last-child { min-width:0; overflow-wrap:anywhere; font:10px 'JetBrains Mono',monospace; }
+  .git-compare-status { flex:0 0 auto; color:var(--accent); font-size:9px; text-transform:uppercase; }
+  #git-compare-detail { display:grid; grid-template-columns:1fr; gap:8px; margin-top:8px; }
+  .git-compare-column { min-width:0; }
+  .git-compare-column strong { display:block; margin:4px 0; color:var(--muted); font-size:10px; }
+  .git-compare-column pre { max-height:180px; overflow:auto; margin:0; padding:8px; border:1px solid var(--border); border-radius:5px; background:var(--bg); color:var(--text); white-space:pre-wrap; overflow-wrap:anywhere; font:10px/1.5 'JetBrains Mono',monospace; }
+  #git-compare-results[hidden],#git-compare-detail[hidden] { display:none !important; }
+  .git-connect-form[hidden],#git-status-view[hidden],#git-disconnect[hidden],#git-empty-files[hidden] { display:none !important; }
+  :root[data-theme="light"] .git-connect-form button { color:#fff; }
+  :root[data-theme="light"] .git-repo-link,:root[data-theme="light"] .git-commit-link,:root[data-theme="light"] .git-file-path { color:var(--text); }
+  .search-result { padding:7px 8px; border:0; border-radius:5px; background:transparent; color:var(--text); text-align:left; cursor:pointer; }
+  .search-result:hover { background:var(--surface-3); }
+  .search-result-file { display:block; font:11px 'JetBrains Mono',monospace; }
+  .search-result-location { display:block; overflow:hidden; margin-top:3px; color:var(--muted); font:10px 'JetBrains Mono',monospace; text-overflow:ellipsis; white-space:nowrap; }
+  .command-search { cursor:pointer; }
+  .command-search input { cursor:pointer; }
+  #command-palette { position:fixed; inset:0; z-index:1100; display:flex; justify-content:center; align-items:flex-start; padding:12vh 18px 18px; background:#0009; }
+  #members-dialog { position:fixed; inset:0; z-index:1050; display:grid; place-items:center; padding:18px; background:#0009; }
+  #members-dialog[hidden] { display:none; }
+  .members-card { width:min(460px,100%); max-height:min(78vh,620px); display:flex; flex-direction:column; padding:18px; border:1px solid var(--border); border-radius:12px; background:var(--panel); box-shadow:0 20px 70px #0008; }
+  .members-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .members-head h2 { margin:0; font-size:17px; }
+  .members-close { width:36px; height:36px; border:1px solid var(--border); border-radius:7px; background:transparent; color:var(--text); cursor:pointer; font-size:20px; }
+  #members-note { margin:8px 0; color:var(--muted); font-size:12px; line-height:1.45; }
+  #members-list { overflow:auto; display:flex; flex-direction:column; gap:7px; }
+  .member-row { display:flex; align-items:center; gap:8px; padding:9px; border:1px solid var(--border); border-radius:8px; background:var(--surface-2); }
+  .member-main { flex:1; min-width:0; }
+  .member-name { overflow-wrap:anywhere; color:var(--text); font-size:12px; font-weight:600; }
+  .member-role { margin-top:3px; color:var(--muted); font-size:10px; text-transform:capitalize; }
+  .member-remove,.member-leave { border:1px solid var(--border); border-radius:6px; padding:6px 8px; background:transparent; color:var(--err); cursor:pointer; font-size:11px; }
+  .member-access-toggle { display:flex; align-items:center; gap:7px; padding:5px 2px 5px 6px; border:0; border-radius:7px; background:transparent; color:var(--muted); cursor:pointer; font:600 10px 'Inter',sans-serif; white-space:nowrap; }
+  .member-access-toggle:hover { background:var(--surface-3); color:var(--text); }
+  .member-access-toggle:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .member-access-toggle:disabled { opacity:.55; cursor:wait; }
+  .member-access-track { position:relative; width:34px; height:20px; border:1px solid var(--border); border-radius:999px; background:var(--surface-3); transition:background .15s,border-color .15s; }
+  .member-access-thumb { position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:var(--muted); transition:transform .15s,background .15s; }
+  .member-access-toggle.enabled { color:var(--text); }
+  .member-access-toggle.enabled .member-access-track { border-color:var(--accent); background:var(--accent); }
+  .member-access-toggle.enabled .member-access-thumb { transform:translateX(14px); background:#14201e; }
+  #chat-form[hidden],.lang-select-wrap[hidden],#run-btn[hidden],#workspace-add-file[hidden],.file-delete[hidden] { display:none !important; }
+  .members-foot { display:flex; justify-content:space-between; gap:8px; margin-top:12px; }
+  #command-palette[hidden] { display:none; }
+  .command-palette-card { width:min(600px,100%); overflow:hidden; border:1px solid var(--border); border-radius:10px; background:var(--panel); box-shadow:0 20px 70px #0009; }
+  #command-palette-input { width:100%; padding:14px 16px; border:0; border-bottom:1px solid var(--border); outline:0; background:transparent; color:var(--text); font:14px 'Inter',sans-serif; }
+  #command-palette-results { max-height:55vh; overflow:auto; padding:6px; }
+  .command-option { display:flex; justify-content:space-between; gap:15px; width:100%; padding:10px 12px; border:0; border-radius:6px; background:transparent; color:var(--text); text-align:left; cursor:pointer; font-size:12px; }
+  .command-option:hover,.command-option:focus { outline:0; background:var(--surface-3); }
+  .command-option small { color:var(--muted); }
+  #chat-form { align-items:flex-end; min-height:60px; }
+  #chat-input { height:42px; min-height:42px; max-height:150px; overflow-y:hidden; resize:none; line-height:1.45; padding:10px 12px; }
+  #chat-send { height:42px; min-width:43px; display:flex; align-items:center; justify-content:center; gap:6px; padding:0 12px; }
+  #chat-send svg { width:17px; height:17px; flex:0 0 17px; }
+  #chat-send span { font-size:12px; }
+  #run-btn { background:#347b6d; color:#fff; }
+  .explorer-tabs button { color:#aeb8c5; }
+  .explorer-tabs button.active { color:#f0f3f6; border-bottom-color:var(--accent); }
+  .explorer-pane,.explorer-heading,.tree-root,.explorer-note,.explorer-footer { color:var(--muted); }
+  .tree-file { color:#e1e6eb; }
+  .tree-file.active { outline-color:#57766e; }
+  .editor-tab-meta { color:var(--muted); }
+  #chat-head { color:#c2cad3; }
+  .assistant-tabs button { color:#aeb8c5; }
+  .assistant-tabs button.active { color:#f0f3f6; }
+  .ai-placeholder strong { color:#e9edf3; }
+  :root[data-theme="light"] { --bg:#f3f5f7; --panel:#ffffff; --border:#d9dee5; --text:#202833; --muted:#687585; --accent:#27836f; --accent-dim:#27836f33; --ok:#168568; --err:#c34550; --surface-2:#e9edf1; --surface-3:#e4e8ed; }
+  :root[data-theme="light"] body { background:#f3f5f7; }
+  :root[data-theme="light"] #room-screen { background:#f3f5f7; }
+  :root[data-theme="light"] .editor-topbar { background:linear-gradient(100deg,#f7f9fb,#e9edf2); border-bottom-color:#d7dde5; }
+  :root[data-theme="light"] .brand-mark,:root[data-theme="light"] .brand-name { color:#25303b; }
+  :root[data-theme="light"] .room-chip,:root[data-theme="light"] .command-search,:root[data-theme="light"] .theme-toggle { background:#fff; border-color:#d5dbe3; color:#536171; }
+  :root[data-theme="light"] .command-search input { color:#202833; }
+  :root[data-theme="light"] .command-search input::placeholder { color:#758190; }
+  :root[data-theme="light"] .collaborator-bar { background:#fff; border-color:#d5dbe3; }
+  :root[data-theme="light"] .collaborator-label { color:#52606e; }
+  :root[data-theme="light"] #invite-wrap .secondary { background:#fff; border-color:#d5dbe3; color:#33404e; }
+  :root[data-theme="light"] #lang-select { color:#27323d; }
+  :root[data-theme="light"] #explorer-panel { background:#edf0f4; }
+  :root[data-theme="light"] .explorer-tabs { background:#e7ebf0; }
+  :root[data-theme="light"] .explorer-tabs button { color:#687585; }
+  :root[data-theme="light"] .explorer-tabs button.active { color:#26323e; }
+  :root[data-theme="light"] .explorer-heading,:root[data-theme="light"] .tree-root,:root[data-theme="light"] .explorer-note,:root[data-theme="light"] .explorer-footer { color:#697686; }
+  :root[data-theme="light"] .tree-file { color:#35414e; }
+  :root[data-theme="light"] .tree-file.active { background:#fff; outline-color:#cbd3dc; color:#202833; }
+  :root[data-theme="light"] .editor-tabs { background:#e8ecf1; }
+  :root[data-theme="light"] .editor-tab { background:#fff; color:#27323d; }
+  :root[data-theme="light"] .editor-tab-meta { color:#758190; }
+  :root[data-theme="light"] #work { background:#f3f5f7; }
+  :root[data-theme="light"] #editor-container { background:#fff; border-color:#d2d8e0; }
+  :root[data-theme="light"] #output { background:#fff; border-color:#d2d8e0; }
+  :root[data-theme="light"] #output-head { border-color:#d9dee5; color:#657282; }
+  :root[data-theme="light"] #output-body { color:#202833; }
+  :root[data-theme="light"] #chat { background:#edf0f4; }
+  :root[data-theme="light"] .assistant-tabs { border-color:#d9dee5; }
+  :root[data-theme="light"] .assistant-tabs button { color:#657282; }
+  :root[data-theme="light"] .assistant-tabs button.active { background:#fff; border-color:#d5dbe3; color:#27323d; }
+  :root[data-theme="light"] #chat-head { color:#596777; }
+  :root[data-theme="light"] .chat-text { background:#fff; border-color:#d8dee6; color:#27323d; }
+  :root[data-theme="light"] .chat-msg.me .chat-text { background:#dff3ec; border-color:#c4e3d8; }
+  :root[data-theme="light"] #chat-input { background:#fff; border-color:#ccd4dd; color:#202833; }
+  :root[data-theme="light"] .ai-placeholder { background:#fff; color:#596777; }
+  :root[data-theme="light"] .ai-placeholder strong { color:#26323e; }
+  :root[data-theme="light"] footer { background:#e9edf2; color:#667382; border-color:#d5dbe3; }
+  :root[data-theme="light"] #run-btn { background:#27836f; color:#fff; }
+  :root[data-theme="light"] #chat-send { background:#27836f; color:#fff; }
+  :root[data-theme="light"] .assistant-tabs button.active { color:#27323d; }
+  :root[data-theme="light"] .explorer-note { color:#687585; }
+  :root[data-theme="light"] .tree-file { color:#35414e; }
+  :root[data-theme="light"] .tree-file.active { color:#202833; }
+  :root[data-theme="light"] .ai-placeholder strong { color:#26323e; }
+  :root[data-theme="light"] .editor-tab { color:#27323d; background:#fff; }
+  :root[data-theme="light"] .editor-tab .file-dot { color:#27836f; }
+  :root[data-theme="light"] #chat-note { color:#bd3946; }
+  #chat-list { flex:1; min-height:0; overflow-y:auto; }
+  @media (max-width: 1000px) { #explorer-panel { width:190px; flex-basis:190px; } #chat { width:250px; flex-basis:250px; } .command-search { max-width:280px; } }
+  @media (max-width: 1180px) {
+    .editor-topbar { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; padding:8px 10px; }
+    .brand-cluster { grid-column:1; grid-row:1; gap:7px; }
+    .brand-name { font-size:12px; }
+    .room-chip { max-width:110px; padding:7px; font-size:10px; }
+    .theme-toggle { grid-column:2; grid-row:1; }
+    .command-search { grid-column:1 / -1; grid-row:2; order:initial; flex-basis:auto; width:100%; max-width:none; }
+    .toolbar-actions { grid-column:1 / -1; grid-row:3; justify-content:space-between; flex-wrap:wrap; gap:7px; }
+    .room-tools { flex-wrap:wrap; justify-content:flex-end; }
+    .workspace-body { position:relative; }
+    #explorer-panel { width:190px; flex-basis:190px; }
+    .explorer-tabs { flex-direction:row; height:40px; }
+    .explorer-tabs button { min-height:0; writing-mode:horizontal-tb; transform:none; padding:0 4px; }
+    #chat { width:210px; flex-basis:210px; }
+    .collaborator-label { display:none; }
+  }
+  #mobile-view-switch { display:none; }
+  @media (max-width: 900px) {
+    #mobile-view-switch { display:flex; flex:0 0 44px; align-items:stretch; gap:5px; padding:5px 8px; background:var(--panel); border-bottom:1px solid var(--border); }
+    #mobile-view-switch button { flex:1; border:1px solid transparent; border-radius:7px; color:var(--muted); background:transparent; font-size:12px; }
+    #mobile-view-switch button.active { color:var(--text); background:var(--surface-3); border-color:var(--border); }
+    .workspace-body { flex:1; min-height:0; }
+    #explorer-panel,#room-screen .editor-main,#chat { display:none !important; width:100%; min-width:0; flex:1 1 100%; border:0; }
+    #room-screen[data-mobile-view="files"] #explorer-panel,
+    #room-screen[data-mobile-view="editor"] .editor-main,
+    #room-screen[data-mobile-view="chat"] #chat { display:flex !important; }
+    #explorer-panel { min-height:0; }
+    #chat { min-height:0; }
+    #room-screen footer { display:none; }
+    .editor-tab-meta { display:block; padding-right:8px; font-size:9px; }
+    #work { padding:7px; }
+    #output { height:145px; }
+    .explorer-tabs { height:48px; flex:0 0 48px; }
+    .explorer-tabs button { min-height:44px; font-size:12px; }
+    .explorer-heading button,.theme-toggle,#run-btn { min-height:40px; }
+    .tree-file { min-height:44px; }
+    .file-rename,.file-delete { width:40px; height:40px; opacity:1; }
+    #chat-input { min-height:46px; height:46px; font-size:16px; }
+    #chat-send { height:46px; min-height:46px; }
+    #workspace-search-input,#command-palette-input { font-size:16px; }
+    #chat-form { padding-bottom:max(10px, env(safe-area-inset-bottom)); }
+  }
+  @media (max-width: 560px) {
+    #room-screen { height:100vh; height:100dvh; min-height:0; overflow:hidden; }
+    .editor-topbar { gap:7px; padding:7px 9px; }
+    .brand-cluster { gap:5px; }
+    .brand-name { display:none; }
+    .room-chip { display:block; max-width:112px; padding:6px; font-size:9px; }
+    .collaborator-bar { display:flex; max-width:156px; padding:3px 6px; }
+    #presence-list .presence-chip { max-width:74px; font-size:9px; }
+    #invite-wrap .secondary { padding:5px 6px; font-size:9px; }
+    #members-open { min-height:34px; padding:5px 7px; font-size:9px; }
+    .room-tools { width:100%; justify-content:space-between; }
+    .status { font-size:9px; }
+    #lang-select { max-width:105px; font-size:10px; }
+    #run-btn { padding:7px 10px; font-size:11px; }
+  }
+  @media (max-height: 520px) and (orientation:landscape) {
+    #room-screen .editor-topbar { padding-top:4px; padding-bottom:4px; gap:5px; }
+    #room-screen #mobile-view-switch { flex-basis:38px; padding-top:3px; padding-bottom:3px; }
+    #room-screen #output { height:92px; }
+    #room-screen .editor-tab { min-height:34px; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- ===================== sign in / sign up ===================== -->
+  <div id="auth-screen" class="screen center">
+    <form class="card" id="auth-form">
+      <div>
+        <h1>Collab Editor</h1>
+        <p class="sub">Sign in to create rooms and code together.</p>
+      </div>
+      <div class="tabs">
+        <button type="button" class="tab active" id="tab-login">Log in</button>
+        <button type="button" class="tab" id="tab-register">Sign up</button>
+      </div>
+      <div class="field">
+        <label for="auth-username">Username</label>
+        <input id="auth-username" type="text" autocomplete="username" required maxlength="24" />
+      </div>
+      <div class="field" id="auth-email-field" style="display:none">
+        <label for="auth-email">Email for account recovery</label>
+        <input id="auth-email" type="email" autocomplete="email" maxlength="254" />
+      </div>
+      <div class="field">
+        <label for="auth-password">Password</label>
+        <input id="auth-password" type="password" autocomplete="current-password" required maxlength="128" />
+      </div>
+      <div class="field" id="auth-mfa-field" style="display:none">
+        <label for="auth-mfa-code">Authenticator or recovery code</label>
+        <input id="auth-mfa-code" inputmode="numeric" autocomplete="one-time-code" maxlength="20" />
+      </div>
+      <div class="hint" id="auth-hint"></div>
+      <div class="error" id="auth-error"></div>
+      <button class="primary" type="submit" id="auth-submit">Log in</button>
+      <button type="button" class="link-button" id="forgot-password">Forgot password?</button>
+    </form>
+  </div>
+
+  <div id="recovery-screen" class="screen center">
+    <form class="card" id="forgot-form">
+      <h1>Reset your password</h1>
+      <p class="sub">Enter the verified email address on your account. If it matches, we’ll send a reset link.</p>
+      <div class="field"><label for="forgot-email">Email</label><input id="forgot-email" type="email" autocomplete="email" required /></div>
+      <div class="error" id="forgot-error"></div>
+      <button class="primary" type="submit">Send reset link</button>
+      <button type="button" class="link-button" id="back-to-login">Back to log in</button>
+    </form>
+    <form class="card" id="reset-form" style="display:none">
+      <h1>Choose a new password</h1>
+      <div class="field"><label for="reset-password">New password</label><input id="reset-password" type="password" autocomplete="new-password" required minlength="8" maxlength="128" /></div>
+      <div class="field"><label for="reset-password-confirm">Confirm password</label><input id="reset-password-confirm" type="password" autocomplete="new-password" required minlength="8" maxlength="128" /></div>
+      <div class="error" id="reset-error"></div>
+      <button class="primary" type="submit">Update password</button>
+    </form>
+  </div>
+
+  <!-- ===================== lobby ===================== -->
+  <div id="lobby-screen" class="screen">
+    <div class="topbar">
+      <strong>Collab Editor</strong>
+      <div class="who"><span id="lobby-user"></span><button class="secondary" id="logout-btn">Log out</button></div>
+    </div>
+    <div class="lobby-body">
+      <div class="error" id="lobby-notice"></div>
+      <details class="security-box">
+        <summary>Account security</summary>
+        <div class="hint" id="security-status">Loading security settings…</div>
+        <div class="field"><label for="security-email">Recovery email</label><input id="security-email" type="email" autocomplete="email" maxlength="254" /></div>
+        <div class="field"><label for="security-password">Current password</label><input id="security-password" type="password" autocomplete="current-password" maxlength="128" /></div>
+        <div class="security-row"><button class="secondary" id="save-security-email" type="button">Save and verify email</button><button class="secondary" id="mfa-setup-btn" type="button">Set up authenticator 2FA</button></div>
+        <div class="hint" id="security-message"></div>
+        <div id="mfa-setup-area" style="display:none">
+          <p class="sub">Scan this QR code with Microsoft Authenticator, Google Authenticator, or another TOTP app. Then enter the six-digit code it generates.</p>
+          <div class="mfa-qr-wrap"><canvas id="mfa-qr" aria-label="Authenticator setup QR code"></canvas></div>
+          <p class="hint">Can't scan it? Enter this setup key manually:</p>
+          <code id="mfa-secret"></code>
+          <div class="field"><label for="mfa-enable-code">Authenticator code</label><input id="mfa-enable-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" /></div>
+          <button class="secondary" id="mfa-enable-btn" type="button">Enable 2FA</button>
+        </div>
+        <div id="mfa-disable-area" style="display:none">
+          <div class="field"><label for="mfa-disable-code">Authenticator or recovery code</label><input id="mfa-disable-code" autocomplete="one-time-code" maxlength="20" /></div>
+          <button class="secondary" id="mfa-disable-btn" type="button">Disable 2FA</button>
+        </div>
+        <pre id="mfa-recovery-codes" style="display:none"></pre>
+      </details>
+      <button class="primary" id="create-room">+ Create a room</button>
+      <h2>Join with an invite</h2>
+      <form id="join-form">
+        <input id="join-input" placeholder="Paste an invite link or code" autocomplete="off" />
+        <button class="secondary" type="submit">Join</button>
+      </form>
+      <h2>Your rooms</h2>
+      <div id="room-list"></div>
+    </div>
+  </div>
+
+  <!-- ===================== room ===================== -->
+  <div id="room-screen" class="screen">
+    <header class="editor-topbar">
+      <div class="brand-cluster">
+        <button class="brand-mark" id="back-btn" title="Back to rooms" aria-label="Back to rooms">‹</button>
+        <img class="brand-symbol" src="/logo.svg" alt="" />
+        <span class="brand-name">Collab Editor</span>
+        <span class="room-chip">ROOM <span id="room-id-label"></span></span>
+      </div>
+      <div class="command-search" id="command-search-open" role="button" tabindex="0" aria-label="Open quick file and command search"><span>⌕</span><input type="text" placeholder="Search files or commands" aria-label="Search files or commands" readonly /><small>Ctrl+P</small></div>
+      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch color theme" title="Switch color theme">Light</button>
+      <div class="toolbar-actions">
+        <div class="collaborator-bar"><span id="presence-list"></span><span class="collaborator-label">live</span></div>
+        <span id="invite-wrap">
+          <button class="secondary" id="invite-copy">Share</button>
+          <button class="secondary" id="invite-reset" title="Make the old invite link stop working">Reset</button>
+        </span>
+        <button class="secondary" id="members-open" type="button" title="View room members">Members</button>
+        <div class="room-tools">
+          <div class="status"><span class="status-dot" id="status-dot"></span><span id="status">connecting…</span></div>
+          <div class="lang-select-wrap">
+            <label for="lang-select">language</label>
+            <select id="lang-select">
+              <option value="javascript">JavaScript</option>
+              <option value="python">Python</option>
+              <option value="java">Java</option>
+              <option value="cpp">C++</option>
+              <option value="html">HTML</option>
+              <option value="css">CSS</option>
+              <option value="json">JSON</option>
+              <option value="rust">Rust</option>
+              <option value="plaintext">Plain text</option>
+            </select>
+          </div>
+          <button id="run-btn">Run</button>
+        </div>
+      </div>
+    </header>
+
+    <nav id="mobile-view-switch" aria-label="Mobile workspace views">
+      <button type="button" data-mobile-view="files" aria-pressed="false">Files</button>
+      <button type="button" data-mobile-view="editor" aria-pressed="true" class="active">Editor</button>
+      <button type="button" data-mobile-view="chat" aria-pressed="false">Chat</button>
+    </nav>
+
+    <div class="workspace-body">
+      <aside id="explorer-panel">
+        <nav class="explorer-tabs" aria-label="Workspace panels">
+          <button type="button" class="active" data-explorer="files">Explorer</button>
+          <button type="button" data-explorer="search">Search</button>
+          <button type="button" data-explorer="git">Git</button>
+        </nav>
+        <div class="explorer-pane" id="explorer-files">
+          <div class="explorer-heading"><span>WORKSPACE</span><button id="workspace-add-file" type="button" title="Create a new file" aria-label="Create a new file">+</button></div>
+          <div class="tree-root">⌄ &nbsp;▰ &nbsp;<span id="workspace-root-name">workspace</span></div>
+          <form id="workspace-create-form" class="workspace-create-form" hidden>
+            <span class="file-dot">●</span><input id="workspace-create-name" type="text" maxlength="64" autocomplete="off" placeholder="file-name.js" aria-label="New file name" />
+          </form>
+          <div id="workspace-file-list" aria-label="Workspace files"></div>
+          <div class="explorer-note">Files in this room are shared with its members.</div>
+        </div>
+        <div class="explorer-pane" id="explorer-search" style="display:none">
+          <div class="explorer-heading"><span>SEARCH</span></div>
+          <div class="workspace-search-box"><input id="workspace-search-input" type="search" maxlength="120" placeholder="Search in files" aria-label="Search in workspace files" /></div>
+          <div id="workspace-search-results" aria-live="polite"></div>
+        </div>
+        <div class="explorer-pane" id="explorer-git" style="display:none">
+          <div class="explorer-heading"><span>GIT · GITHUB</span><button type="button" id="git-refresh" class="git-refresh" title="Refresh GitHub status" aria-label="Refresh GitHub status">↻</button></div>
+          <form id="git-connect-form" class="git-connect-form" hidden>
+            <p>Connect a public GitHub repository to view its default branch and latest commit changes.</p>
+            <input id="git-repository-url" type="url" maxlength="300" placeholder="https://github.com/owner/repo" aria-label="Public GitHub repository URL" />
+            <button type="submit">Connect repository</button>
+          </form>
+          <div id="git-status-view" hidden>
+            <div class="git-status-card">
+              <a id="git-repo-link" class="git-repo-link" target="_blank" rel="noopener noreferrer"></a>
+              <div class="git-branch">Default branch: <strong id="git-branch-name"></strong></div>
+              <label class="git-branch-picker" id="git-branch-picker" hidden>Import from branch<select id="git-branch-select" aria-label="Select GitHub branch"></select></label>
+            </div>
+            <div class="explorer-heading"><span>Latest remote commit</span></div>
+            <div class="git-status-card">
+              <a id="git-commit-link" class="git-commit-link" target="_blank" rel="noopener noreferrer"></a>
+              <div id="git-commit-meta" class="git-commit-meta"></div>
+            </div>
+            <div class="git-file-heading">Files in this commit</div>
+            <div id="git-commit-files"></div>
+            <div id="git-empty-files" class="git-panel-note" hidden>No changed files were returned for this commit.</div>
+            <div class="git-compare-panel">
+              <button type="button" id="git-compare">Compare workspace with branch</button>
+              <div id="git-compare-results" hidden>
+                <div id="git-compare-summary" class="git-panel-note" aria-live="polite"></div>
+                <div id="git-compare-files"></div>
+                <div id="git-compare-detail" hidden></div>
+              </div>
+            </div>
+            <div class="git-import-actions"><button type="button" id="git-preview-import" hidden>Preview repository files</button></div>
+            <div id="git-import-preview" hidden>
+              <div class="git-file-heading">Import preview</div>
+              <div id="git-import-summary" class="git-panel-note"></div>
+              <div id="git-import-files"></div>
+              <div class="git-import-actions" id="git-import-actions" hidden><button type="button" class="primary" id="git-import-confirm">Import new files</button><button type="button" id="git-import-cancel">Cancel</button></div>
+            </div>
+            <button type="button" id="git-disconnect" class="git-disconnect" hidden>Disconnect repository</button>
+          </div>
+          <div id="git-panel-note" class="git-panel-note" aria-live="polite"></div>
+        </div>
+        <div class="explorer-footer">LIVE WORKSPACE · PRIVATE ROOM</div>
+      </aside>
+
+      <div class="editor-main">
+        <div class="editor-tabs">
+          <div id="editor-tab-list" class="editor-tab-list" role="tablist" aria-label="Open files"></div>
+          <span class="editor-tab-meta" id="editor-position">Ln 1, Col 1</span>
+        </div>
+        <main>
+          <div id="work">
+            <div id="editor-container"></div>
+            <section id="output">
+              <div id="output-head">
+                <span class="title">Run output</span>
+                <div id="output-actions">
+                  <span id="output-meta"></span>
+                  <button type="button" id="output-toggle" aria-expanded="true" title="Collapse Run Output (Ctrl+J)">▾</button>
+                  <button type="button" id="output-clear">clear</button>
+                </div>
+              </div>
+              <pre id="output-body"></pre>
+            </section>
+          </div>
+        </main>
+      </div>
+
+      <aside id="chat">
+        <div class="assistant-tabs" role="tablist" aria-label="Collaboration panel">
+          <button type="button" class="active" id="chat-tab" role="tab" aria-selected="true">Chat</button>
+          <button type="button" id="ai-tab" role="tab" aria-selected="false">AI</button>
+        </div>
+        <div id="chat-pane" class="chat-pane">
+          <div id="chat-head">Room conversation</div>
+          <div id="chat-list"></div>
+          <div id="chat-note"></div>
+          <form id="chat-form">
+            <textarea id="chat-input" rows="1" maxlength="2000" placeholder="Write a message..."></textarea>
+            <button id="chat-send" type="submit" aria-label="Send message" title="Send message"><span>Send</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 10 17 3l-4.5 14-2.2-5-7.3-2Z" fill="currentColor"/><path d="m10.3 12 6.7-9" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></button>
+          </form>
+        </div>
+        <div id="ai-pane" class="chat-pane" style="display:none">
+          <div class="ai-placeholder"><strong>AI Assistant</strong>AI assistance is planned for a later version. This tab is a placeholder; no prompts or code are sent to an AI service.</div>
+        </div>
+      </aside>
+    </div>
+
+    <footer>Live collaboration · Room access controlled · Run sandboxed code</footer>
+  </div>
+
+  <div id="app-dialog" role="presentation" hidden>
+    <section class="app-dialog-card" role="alertdialog" aria-modal="true" aria-labelledby="app-dialog-title" aria-describedby="app-dialog-message">
+      <h2 id="app-dialog-title">Notice</h2><p id="app-dialog-message"></p>
+      <div class="app-dialog-actions"><button type="button" class="secondary" id="app-dialog-cancel">Cancel</button><button type="button" class="primary" id="app-dialog-confirm">OK</button></div>
+    </section>
+  </div>
+  <div id="history-dialog" role="presentation" hidden>
+    <section class="history-card" role="dialog" aria-modal="true" aria-labelledby="history-title">
+      <div class="history-head"><h2 id="history-title">File history</h2><button id="history-close" type="button" aria-label="Close history">×</button></div>
+      <div class="history-actions"><span id="history-file-name"></span><button id="history-checkpoint" type="button" class="secondary">Save checkpoint</button><button id="history-restore" type="button" class="primary" disabled>Restore version</button></div>
+      <div class="history-body"><div id="history-version-list"></div><pre id="history-preview" aria-label="Version preview">Select a saved version to preview it.</pre></div>
+      <div id="history-note" aria-live="polite"></div>
+    </section>
+  </div>
+  <div id="members-dialog" role="presentation" hidden>
+    <section class="members-card" role="dialog" aria-modal="true" aria-labelledby="members-title">
+      <div class="members-head"><h2 id="members-title">Room members</h2><button type="button" class="members-close" id="members-close" aria-label="Close members">×</button></div>
+      <p id="members-note" aria-live="polite">Loading members…</p>
+      <div id="members-list"></div>
+      <div class="members-foot"><button type="button" class="member-leave" id="members-leave" hidden>Leave room</button><span></span></div>
+    </section>
+  </div>
+  <div id="command-palette" role="presentation" hidden>
+    <section class="command-palette-card" role="dialog" aria-modal="true" aria-label="Quick open and commands">
+      <input id="command-palette-input" type="search" autocomplete="off" placeholder="Type a file name or command…" aria-label="Type a file name or command" />
+      <div id="command-palette-results" role="listbox"></div>
+    </section>
+  </div>
+
+  <script src="bundle.js"></script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+{
+  "name": "collab-editor",
+  "version": "0.7.0",
+  "description": "Phase 7: accounts, room access control, limits and hardening",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20.6"
+  },
+  "scripts": {
+    "setup": "node scripts/setup-env.js",
+    "start": "node --env-file=.env server.js",
+    "start:supervised": "node supervise.js",
+    "build": "esbuild client-src/client.js --bundle --outfile=public/bundle.js",
+    "test": "node test-ops.js && node test-security.js"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.6.0",
+    "@codemirror/lang-cpp": "^6.0.2",
+    "@codemirror/lang-css": "^6.2.1",
+    "@codemirror/lang-html": "^6.4.9",
+    "@codemirror/lang-java": "^6.0.1",
+    "@codemirror/lang-javascript": "^6.2.2",
+    "@codemirror/lang-json": "^6.0.1",
+    "@codemirror/lang-python": "^6.1.6",
+    "@codemirror/lang-rust": "^6.0.1",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.28.0",
+    "codemirror": "^6.0.1",
+    "events": "^3.3.0",
+    "express": "^4.19.2",
+    "ioredis": "^4.28.5",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^10.4.0",
+    "ot-text": "^1.0.1",
+    "pg": "^8.12.0",
+    "qrcode": "^1.5.4",
+    "reconnecting-websocket": "^4.4.0",
+    "sharedb": "^4.1.2",
+    "ws": "^8.17.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.23.0"
+  }
+}
