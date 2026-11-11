@@ -873,7 +873,9 @@ function startRoom(roomId, info) {
 
   function startShareDb() {
     if (disposed) return;
-  shareSocket = new ReconnectingWebSocket(proto + location.host + '/sharedb?room=' + encodeURIComponent(roomId));
+  // ShareDB owns the pending-op queue and resends/rebases it after reconnect.
+  // Avoid a second transport-level queue, which ShareDB documents as undefined behavior.
+  shareSocket = new ReconnectingWebSocket(proto + location.host + '/sharedb?room=' + encodeURIComponent(roomId), [], { maxEnqueuedMessages: 0 });
     watchClose(shareSocket);
     connection = new ShareDBConnection(shareSocket);
     function syncError(where, err, rejectedDoc, editorView) {
